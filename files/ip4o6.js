@@ -3,6 +3,9 @@
 'require network';
 'require ui';
 
+network.registerErrorCode('MISSING_PEER_IPV6ADDRESS', _('Missing peer IPv6 address'));
+network.registerErrorCode('MISSING_FIXED_IPV4ADDRESS', _('Missing fixed local IPv4 address'));
+
 network.registerPatternVirtual(/^ip4o6-.+$/);
 
 return network.registerProtocol('ip4o6', {
@@ -33,37 +36,18 @@ return network.registerProtocol('ip4o6', {
     renderFormOptions: function(s) {
         let o;
 
-        let ispOpt = s.taboption('general', form.ListValue, "isp", _('ISP'));
+        let ispOpt = s.taboption('general', form.ListValue, "isp", _('Tunneling Service'), _('Select your ISP tunneling service. "Other" will not work for now.'));
         ispOpt.default = "interlink";
         ispOpt.value("interlink", _("ZOOT NATIVE"));
-        ispOpt.value("other", _("Other ISP"));
+        ispOpt.value("other", _("Other"));
 
-        o = s.taboption('general', form.Value, 'peer_ipv6addr', _('Peer IPv6 Address'));
+        o = s.taboption('general', form.Value, 'peer_ipv6addr', _('Peer IPv6 Address'), _('IPv6 address on the other end of IPIP tunnel.'));
         o.datatype = 'ip6addr';
         o.optional = false;
         o.rmempty = false;
 
-        /*
-        // 解決策1: 単一フィールドでカスタムrender使用
-        let ifaceOpt = s.taboption('general', form.Value, 'iface_id', _('Local IPv6 Interface'));
-        ifaceOpt.optional = true;
-        ifaceOpt.placeholder = "::feed"; // デフォルト
-
-        // カスタムrender関数でplaceholderを動的に設定
-        ifaceOpt.render = function(option_index, section_id, in_table) {
-            // ISPの値を取得
-            const ispField = this.map.lookupOption('isp', section_id);
-            if (ispField && ispField[0]) {
-                const ispValue = ispField[0].formvalue(section_id) || ispField[0].default;
-                this.placeholder = (ispValue === 'interlink') ? "::feed" : "::1";
-            }
-            return form.Value.prototype.render.call(this, option_index, section_id, in_table);
-        };
-        */
-
-        // 解決策2: 別の方法 - depends()を使う場合は異なるフィールド名を使用
         // ZOOT NATIVE用
-        let ifaceOptInterlink = s.taboption('general', form.Value, 'iface_id_interlink', _('Local IPv6 Interface'));
+        let ifaceOptInterlink = s.taboption('general', form.Value, 'iface_id_interlink', _('Local IPv6 Interface'), _('Interface ID for the local end of IPIP tunnel. The local IPv6 address is not required.'));
         ifaceOptInterlink.optional = true;
         ifaceOptInterlink.placeholder = "::feed";
         ifaceOptInterlink.depends('isp', 'interlink');
@@ -75,7 +59,7 @@ return network.registerProtocol('ip4o6', {
         };
 
         // Other ISP用
-        let ifaceOptOther = s.taboption('general', form.Value, 'iface_id_other', _('Local IPv6 Interface'));
+        let ifaceOptOther = s.taboption('general', form.Value, 'iface_id_other', _('Local IPv6 Interface'), _('Interface ID for the local end of IPIP tunnel. The local IPv6 address is not required.'));
         ifaceOptOther.optional = true;
         ifaceOptOther.placeholder = "::1";
         ifaceOptOther.depends('isp', 'other');
@@ -86,14 +70,14 @@ return network.registerProtocol('ip4o6', {
             return this.map.data.set(this.map.config, section_id, 'iface_id', value);
         };
 
-        o = s.taboption('general', form.Value, 'ipv4addr', _('Fixed Local IPv4 Address'));
+        o = s.taboption('general', form.Value, 'ipv4addr', _('Fixed global IPv4 Address'), _('Your ISP will provide a global IPv4 address.'));
         o.datatype = 'ip4addr';
         o.optional = false;
         o.rmempty = false;
 
-        o = s.taboption('general', form.Value, 'mtu', _('MTU'));
+        o = s.taboption('general', form.Value, 'mtu', _('MTU'), _('Largest data size on IPIP tunnel. Reduce the size if not work well.'));
         o.datatype = 'uinteger';
-        o.placeholder = '1480';
+        o.placeholder = '1452';
         o.optional = true;
     }
 });

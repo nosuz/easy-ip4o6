@@ -14,7 +14,7 @@ define Package/$(PKG_NAME)
   SECTION:=net
   CATEGORY:=Network
   TITLE:=Easy IPv4 over IPv6 protocol support for LuCI
-  DEPENDS:=+luci +netifd
+  DEPENDS:=+luci +netifd +kmod-ip6-tunnel
 endef
 
 define Package/$(PKG_NAME)/install
