@@ -1,5 +1,17 @@
 # Easy-IP4o6
 
+## Apply LuDI
+
+On OpenWrt
+
+```bash
+rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
+```
+
+On Web browser
+
+`Ctlr + Shift + R`
+
 ## Make package
 
 ```bash
