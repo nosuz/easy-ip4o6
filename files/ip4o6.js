@@ -5,6 +5,8 @@
 
 network.registerErrorCode('MISSING_PEER_IPV6ADDRESS', _('Missing peer IPv6 address'));
 network.registerErrorCode('MISSING_FIXED_IPV4ADDRESS', _('Missing fixed local IPv4 address'));
+network.registerErrorCode('NO_IPIP_TUNNEL', _('IPv4 over IPv6 tunnel was stopped.'));
+
 
 network.registerPatternVirtual(/^ip4o6-.+$/);
 
