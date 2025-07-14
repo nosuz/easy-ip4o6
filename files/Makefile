@@ -17,6 +17,7 @@ install:
 	install -m 0644 $(LJS_SRC) $(LJS_DST)
 	install -d $(SH_DST)
 	install -m 0755 $(SH_SRC) $(SH_DST)
+	rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
 	@echo "Done."
 
 clean:
