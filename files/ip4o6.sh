@@ -15,6 +15,52 @@ logger -t ip4o6 "arg4: $4"
 	init_proto "$@"
 }
 
+# Function to get tunnel state file path
+get_tunnel_state_file() {
+    local config="$1"
+    echo "/tmp/ip4o6_${config}.state"
+}
+
+# Function to save tunnel state
+save_tunnel_state() {
+    local config="$1"
+    local tunnel_local_ipv6="$2"
+    local wan_dev="$3"
+    local state_file=$(get_tunnel_state_file "$config")
+
+    cat > "$state_file" << EOF
+tunnel_local_ipv6=$tunnel_local_ipv6
+wan_dev=$wan_dev
+EOF
+    logger -t ip4o6 "Saved tunnel state to $state_file: local=$tunnel_local_ipv6, wan_dev=$wan_dev"
+}
+
+# Function to load tunnel state
+load_tunnel_state() {
+    local config="$1"
+    local state_file=$(get_tunnel_state_file "$config")
+
+    if [ -f "$state_file" ]; then
+        . "$state_file"
+        logger -t ip4o6 "Loaded tunnel state from $state_file: local=$tunnel_local_ipv6, wan_dev=$wan_dev"
+        return 0
+    else
+        logger -t ip4o6 "No tunnel state file found: $state_file"
+        return 1
+    fi
+}
+
+# Function to remove tunnel state
+remove_tunnel_state() {
+    local config="$1"
+    local state_file=$(get_tunnel_state_file "$config")
+
+    if [ -f "$state_file" ]; then
+        rm -f "$state_file"
+        logger -t ip4o6 "Removed tunnel state file: $state_file"
+    fi
+}
+
 # Function to expand IPv6 addresses
 expand_ipv6() {
     local addr="$1"
@@ -393,205 +439,6 @@ check_wan_ra_ipv6() {
     [ -n "$ra_addr" ]
 }
 
-# Function to check if monitoring script is already running
-is_monitoring_running() {
-    local config="$1"
-    local pidfile="/var/run/ip4o6_monitor_${config}.pid"
-
-    if [ -f "$pidfile" ]; then
-        local pid=$(cat "$pidfile")
-        if kill -0 "$pid" 2>/dev/null; then
-            return 0  # Running
-        else
-            # PID file exists but process is dead, clean up
-            rm -f "$pidfile"
-        fi
-    fi
-    return 1  # Not running
-}
-
-# Function to update monitoring script's tracked address
-update_monitoring_address() {
-    local config="$1"
-    local new_address="$2"
-    local control_file="/var/run/ip4o6_monitor_${config}.control"
-
-    echo "UPDATE_ADDRESS:$new_address" > "$control_file"
-    logger -t ip4o6 "Updated monitoring address for $config to: $new_address"
-}
-
-# Function to start monitoring script (修正版)
-start_monitoring() {
-    local config="$1"
-    local wan_dev="$2"
-    local monitor_file="/tmp/ip4o6_monitor_${config}.sh"
-
-    # Check if monitoring is already running
-    if is_monitoring_running "$config"; then
-        logger -t ip4o6 "Monitoring already running for $config, updating address"
-        local current_ra_addr="$(get_ra_ipv6_addr "$wan_dev")"
-        update_monitoring_address "$config" "$current_ra_addr"
-        return 0
-    fi
-
-    # Get initial RA IPv6 address to monitor
-    local initial_ra_addr="$(get_ra_ipv6_addr "$wan_dev")"
-
-    # Create monitoring script (修正版)
-    cat > "$monitor_file" << EOF
-#!/bin/sh
-CONFIG="$config"
-WAN_DEV="$wan_dev"
-PIDFILE="/var/run/ip4o6_monitor_\${CONFIG}.pid"
-CONTROL_FILE="/var/run/ip4o6_monitor_\${CONFIG}.control"
-CURRENT_RA_ADDR="$initial_ra_addr"
-INTERFACE_DOWN=0
-
-# Save PID
-echo \$\$ > "\$PIDFILE"
-
-logger -t ip4o6 "Starting persistent monitoring for \$CONFIG on \$WAN_DEV (initial RA addr: \$CURRENT_RA_ADDR)"
-
-# Function to get RA-assigned IPv6 address (not tunnel-specific)
-get_ra_ipv6_addr() {
-    local wan_dev="\$1"
-    if [ -z "\$wan_dev" ]; then
-        return 1
-    fi
-
-    # Get all global IPv6 addresses and filter out tunnel-specific ones
-    # RA addresses are typically dynamic and have different characteristics
-    local ra_ipv6=""
-
-    # Try to get RA address by checking for dynamic flag or avoiding known tunnel addresses
-    # This gets the first non-tunnel global IPv6 address
-    ra_ipv6="\$(ip -6 addr show dev "\$wan_dev" | awk '
-        /inet6 [0-9a-f:]+\/[0-9]+ scope global/ {
-            addr = \$2;
-            # Skip if this looks like a tunnel address (manually added /128)
-            if (index(addr, "/128") == 0) {
-                print addr;
-                exit;
-            }
-        }')"
-
-    echo "\$ra_ipv6"
-}
-
-# Function to check for control commands
-check_control_commands() {
-    if [ -f "\$CONTROL_FILE" ]; then
-        local cmd=\$(cat "\$CONTROL_FILE")
-        rm -f "\$CONTROL_FILE"
-
-        case "\$cmd" in
-            UPDATE_ADDRESS:*)
-                local new_addr="\${cmd#UPDATE_ADDRESS:}"
-                logger -t ip4o6 "Control command: updating tracked address to \$new_addr"
-                CURRENT_RA_ADDR="\$new_addr"
-                # Reset interface down flag when address is updated
-                INTERFACE_DOWN=0
-                return 0
-                ;;
-            STOP)
-                logger -t ip4o6 "Control command: stopping monitoring"
-                return 1
-                ;;
-        esac
-    fi
-    return 0
-}
-
-# Main monitoring loop (修正版)
-while true; do
-    # Check for control commands
-    if ! check_control_commands; then
-        break
-    fi
-
-    # Check if interface still exists (but don't stop monitoring)
-    if ! ip link show dev "\$WAN_DEV" >/dev/null 2>&1; then
-        logger -t ip4o6 "WAN device \$WAN_DEV disappeared, waiting for recovery..."
-        sleep 30
-        continue
-    fi
-
-    # Get current RA IPv6 address
-    current_ra_addr="\$(get_ra_ipv6_addr "\$WAN_DEV")"
-
-    # Check if RA address changed or disappeared
-    if [ -z "\$current_ra_addr" ]; then
-        # IPv6 address is lost
-        if [ \$INTERFACE_DOWN -eq 0 ]; then
-            # First time detecting address loss - bring interface down once
-            logger -t ip4o6 "RA IPv6 address lost on \$WAN_DEV, bringing interface down"
-            ifdown "\$CONFIG" 2>/dev/null
-            INTERFACE_DOWN=1
-            CURRENT_RA_ADDR=""
-        else
-            # Interface is already down, just monitor for recovery
-            logger -t ip4o6 "RA IPv6 address still absent on \$WAN_DEV, waiting for recovery..."
-        fi
-    elif [ \$INTERFACE_DOWN -eq 1 ]; then
-        # Interface was down but IPv6 address is now available - bring it back up
-        logger -t ip4o6 "RA IPv6 address recovered on \$WAN_DEV (\$current_ra_addr), bringing interface up"
-        CURRENT_RA_ADDR="\$current_ra_addr"
-        INTERFACE_DOWN=0
-        ifup "\$CONFIG" 2>/dev/null
-    elif [ "\$current_ra_addr" != "\$CURRENT_RA_ADDR" ]; then
-        # Address changed while interface was up
-        logger -t ip4o6 "RA IPv6 address changed on \$WAN_DEV (\$CURRENT_RA_ADDR -> \$current_ra_addr), restarting interface"
-        CURRENT_RA_ADDR="\$current_ra_addr"
-        ifdown "\$CONFIG" 2>/dev/null
-        sleep 5
-        ifup "\$CONFIG" 2>/dev/null
-    fi
-
-    sleep 30
-done
-
-# Clean up PID file
-rm -f "\$PIDFILE"
-rm -f "\$CONTROL_FILE"
-logger -t ip4o6 "Monitoring stopped for \$CONFIG"
-EOF
-
-    chmod +x "$monitor_file"
-
-    # Start monitoring in background
-    "$monitor_file" &
-
-    logger -t ip4o6 "Started persistent monitoring script for $config (PID: $!) - monitoring RA addr: $initial_ra_addr"
-}
-
-# Function to stop monitoring script
-stop_monitoring() {
-    local config="$1"
-    local pidfile="/var/run/ip4o6_monitor_${config}.pid"
-    local control_file="/var/run/ip4o6_monitor_${config}.control"
-    local monitor_file="/tmp/ip4o6_monitor_${config}.sh"
-
-    # Send stop command via control file
-    echo "STOP" > "$control_file"
-
-    # Give it a moment to process the command
-    sleep 2
-
-    # If still running, force kill
-    if [ -f "$pidfile" ]; then
-        local pid=$(cat "$pidfile")
-        if kill -0 "$pid" 2>/dev/null; then
-            logger -t ip4o6 "Force stopping monitoring for $config (PID: $pid)"
-            kill "$pid" 2>/dev/null
-        fi
-        rm -f "$pidfile"
-    fi
-
-    rm -f "$control_file"
-    rm -f "$monitor_file"
-    logger -t ip4o6 "Monitoring stopped for $config"
-}
-
 proto_ip4o6_setup() {
 	logger -t ip4o6 "setup()"
 	local config="$1"
@@ -664,6 +511,9 @@ proto_ip4o6_setup() {
 
 	logger -t ip4o6 "tunnel local_ipv6: $tunnel_local_ipv6"
 
+	# Save tunnel state for teardown
+	save_tunnel_state "$config" "$tunnel_local_ipv6" "$wan_dev"
+
 	# Add the local IPv6 address to WAN device
 	if [ -n "$wan_dev" ]; then
 		ip -6 addr show dev "$wan_dev" | grep -q "$tunnel_local_ipv6/128" || \
@@ -673,34 +523,31 @@ proto_ip4o6_setup() {
 	# Setup interface using netifd protocol handler
 	proto_init_update "$ifname" 1
 
-	# Set IPv4 address (point-to-point)
+	# Set IPv4 address
 	proto_add_ipv4_address "$ipv4addr" "32" "" ""
 
-	# Set default route via tunnel interface
-	# proto_add_ipv4_route "0.0.0.0" 0 "" "$ifname"
+	# Set default route
 	proto_add_ipv4_route "0.0.0.0" 0 "" ""
 
-	# Create IPv4 over IPv6 tunnel
+	# Add tunnel
 	proto_add_tunnel
 	json_add_string mode ipip6
 	json_add_int mtu "${mtu:-1452}"
 	json_add_int ttl "64"
 	json_add_string local "$tunnel_local_ipv6"
 	json_add_string remote "$peer_ipv6addr"
-	[ -n "$wan_dev" ] && json_add_string link "$wan_dev"
-	json_add_object "data"
-	json_close_object
+	json_add_string link "$wan_dev"
 	proto_close_tunnel
 
-	# DNS configuration (if needed)
-	# proto_add_dns_server "8.8.8.8"
-	# proto_add_dns_server "8.8.4.4"
+	# Add dependency AFTER tunnel
+	# proto_add_data
+	# json_add_array "depends_on"
+	# json_add_string "" "wan"  # ここは明示的に "wan" に固定を推奨
+	# json_close_array
+	# proto_close_data
 
-	# Apply configuration
+	# Send configuration
 	proto_send_update "$config"
-
-	# Start monitoring for global IPv6 address (修正版)
-	start_monitoring "$config" "$wan_dev"
 
 	logger -t ip4o6 "IPv4 over IPv6 tunnel setup completed with dependency on $wan_interface_name"
 }
@@ -712,35 +559,35 @@ proto_ip4o6_teardown() {
 
 	logger -t ip4o6 "Tearing down tunnel interface: $ifname"
 
-	# Note: We don't stop monitoring here to keep it persistent
-	# stop_monitoring "$config"
+	# Load tunnel state from setup
+	local tunnel_local_ipv6=""
+	local wan_dev=""
 
-	# Get the same parameters to reconstruct tunnel_local_ipv6
-	local ipv4addr iface_id peer_ipv6addr mtu isp
-	json_get_vars ipv4addr iface_id peer_ipv6addr mtu isp
+	if load_tunnel_state "$config"; then
+		logger -t ip4o6 "Using saved tunnel state: local=$tunnel_local_ipv6, wan_dev=$wan_dev"
 
-	# Get WAN interface and reconstruct tunnel_local_ipv6
-	wan_dev="$(ip -6 route | grep '^default' | sed -n 's/.* dev \([^ ]\+\).*/\1/p' | head -n1)"
-	if [ -n "$wan_dev" ]; then
-		# Get tunnel local IPv6 address
-		tunnel_local_ipv6=$(get_tunnel_local_ipv6 "$iface_id" "$isp")
-
-		if [ -n "$tunnel_local_ipv6" ]; then
+		# Remove the tunnel local IPv6 address from WAN device
+		if [ -n "$tunnel_local_ipv6" ] && [ -n "$wan_dev" ]; then
 			logger -t ip4o6 "Removing tunnel local IPv6: $tunnel_local_ipv6 from $wan_dev"
-			# Remove the tunnel local IPv6 address from WAN device
 			ip -6 addr del "$tunnel_local_ipv6/128" dev "$wan_dev" 2>/dev/null || true
 		fi
-	fi
 
-	# send error message
-	proto_notify_error "$config" "NO_IPIP_TUNNEL"
+		# Remove tunnel state file
+		remove_tunnel_state "$config"
+	else
+		logger -t ip4o6 "No saved tunnel state found"
+	fi
 
 	# Remove tunnel interface (netifd will handle the cleanup)
 	proto_init_update "$ifname" 0
+	# send error message
+	proto_notify_error "$config" "NO_IPIP_TUNNEL"
+	# proto_set_available 0
+
 	# DEBUG: make permission error.
 	proto_send_update "$config"
 
-	logger -t ip4o6 "IPv4 over IPv6 tunnel teardown completed (monitoring continues)"
+	logger -t ip4o6 "IPv4 over IPv6 tunnel teardown completed"
 }
 
 proto_ip4o6_init_config() {
@@ -754,7 +601,7 @@ proto_ip4o6_init_config() {
 
 	proto_config_add_optional "iface_id"
 	proto_config_add_optional "mtu"
-	proto_config_add_optional "depends"
+	# proto_config_add_optional "depends"
 
 	proto_no_device=1
 	proto_shell_init=1
