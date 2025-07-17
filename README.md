@@ -30,7 +30,7 @@ Easy-IP4o6は、Interlinkの[ZOOT NATIVE](https://www.interlink.or.jp/service/zo
 
 ### パッケージでインストール
 
-1. パッケージをReleaseからダウンロードします。
+1. パッケージを[Release](https://github.com/nosuz/easy-ip4o6/releases)からダウンロードします。
 2. Web管理画面のSystemメニューからSoftwareを選択します。
 3. (Optional) `Update Lists...`ボタンを押してパッケージリストを更新します。
 4. `Uplocad Package...`ボタンを押して、ダウンロード済みのパッケージをアップロードとインストールします。

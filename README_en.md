@@ -28,7 +28,7 @@ There are two ways to install `easy-ip4o6`: using a package or manual installati
 
 ### Package Installation
 
-1. Download the package from Releases.
+1. Download the package from [Releases](https://github.com/nosuz/easy-ip4o6/releases).
 2. Select Software from the System menu in the web management interface.
 3. (Optional) Press the `Update Lists...` button to update the package list.
 4. Press the `Upload Package...` button to upload and install the downloaded package.
