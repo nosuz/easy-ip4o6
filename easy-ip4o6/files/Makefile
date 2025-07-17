@@ -24,8 +24,9 @@ install:
 	install -d $(HTP_DST)
 	install -m 0644 $(HTP_SRC) $(HTP_DST)
 	rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
+	@echo "Reloading network configurations."
+	/etc/init.d/network reload
 	@echo "Done."
-	@echo "Reboot is required at the first installation."
 
 remove:
 	@echo "Removing protocol files..."
@@ -33,14 +34,14 @@ remove:
 		echo "Removing ip4o6 interface: $$iface"; \
 		uci delete network.$$iface; \
 	done; \
-	uci commit network; \
-	/etc/init.d/network reload
-	@echo "Wait 60 sec."
-	sleep 60
+	uci commit network;
 
 	rm $(LJS_DST)/$(LJS_SRC)
 	rm $(SH_DST)/$(SH_SRC)
 	rm  $(HTP_DST)/$(HTP_SRC)
+
+	@echo "Reloading network configurations."
+	/etc/init.d/network reload
 	@echo "Done."
 
 clean:
