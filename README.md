@@ -32,8 +32,7 @@ find bin/packages -name '*.ipk' -print|grep tmate
 
 ```bash
 cd openwrt
-mkdir -p package/easy-ip4o6
-cp -r ../Makefile ../files package/easy-ip4o6/
+cp -r ../easy-ip4o6 package
 # Enable easy-ip4o6 package in Packages/Network
 make menuconfig
 make package/easy-ip4o6/{clean,compile} -j$(nproc)
