@@ -34,6 +34,7 @@ Easy-IP4o6は、Interlinkの[ZOOT NATIVE](https://www.interlink.or.jp/service/zo
 2. Web管理画面のSystemメニューからSoftwareを選択します。
 3. (Optional) `Update Lists...`ボタンを押してパッケージリストを更新します。
 4. `Uplocad Package...`ボタンを押して、ダウンロード済みのパッケージをアップロードとインストールします。
+5. SystemメニューからRebootを選択して再起動します。
 
 #### パッケージをマニュアルでインストール
 
@@ -43,6 +44,7 @@ opkg update
 
 # パッケージのインストール
 opkg install easy-ip4o6_*_all.ipk
+reboot
 ```
 
 ### マニュアルでインストール
@@ -61,6 +63,7 @@ scp -r easy-ip4o6/files root@<OpenWrt Address>:
 cd files
 make install
 # `make remove` to uninstall files.
+reboot
 ```
 
 マニュアルでインストールした`easy-ip4o6`を削除するには、`make remove`を実行します。

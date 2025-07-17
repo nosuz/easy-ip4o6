@@ -32,6 +32,7 @@ There are two ways to install `easy-ip4o6`: using a package or manual installati
 2. Select Software from the System menu in the web management interface.
 3. (Optional) Press the `Update Lists...` button to update the package list.
 4. Press the `Upload Package...` button to upload and install the downloaded package.
+5. Select Reboot from the System menu, and reboot the router.
 
 #### Manual Package Installation
 
@@ -41,6 +42,7 @@ opkg update
 
 # Install the package
 opkg install easy-ip4o6_*_all.ipk
+reboot
 ```
 
 ### Manual Installation
@@ -59,6 +61,7 @@ scp -r easy-ip4o6/files root@<OpenWrt Address>:
 cd files
 make install
 # `make remove` to uninstall files.
+reboot
 ```
 
 To remove manually installed `easy-ip4o6`, run `make remove`.
