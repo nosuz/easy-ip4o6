@@ -1,4 +1,5 @@
 #!/bin/sh
+. /lib/functions/network.sh
 
 # logger -t ip4o6 "proto_ip4o6_setup() called with config=$1"
 
@@ -25,14 +26,16 @@ get_tunnel_state_file() {
 save_tunnel_state() {
     local config="$1"
     local tunnel_local_ipv6="$2"
-    local wan_dev="$3"
+    local wan_interface="$3"
+    local wan_dev="$4"
     local state_file=$(get_tunnel_state_file "$config")
 
     cat > "$state_file" << EOF
 tunnel_local_ipv6=$tunnel_local_ipv6
+wan_interface=$wan_interface
 wan_dev=$wan_dev
 EOF
-    logger -t ip4o6 "Saved tunnel state to $state_file: local=$tunnel_local_ipv6, wan_dev=$wan_dev"
+    logger -t ip4o6 "Saved tunnel state to $state_file: local=$tunnel_local_ipv6, wan_interface=$wan_interface, wan_dev=$wan_dev"
 }
 
 # Function to load tunnel state
@@ -42,7 +45,7 @@ load_tunnel_state() {
 
     if [ -f "$state_file" ]; then
         . "$state_file"
-        logger -t ip4o6 "Loaded tunnel state from $state_file: local=$tunnel_local_ipv6, wan_dev=$wan_dev"
+        logger -t ip4o6 "Loaded tunnel state from $state_file: local=$tunnel_local_ipv6, wan_interface=$wan_interface, wan_dev=$wan_dev"
         return 0
     else
         logger -t ip4o6 "No tunnel state file found: $state_file"
@@ -311,39 +314,11 @@ compress_ipv6() {
     echo "$compressed"
 }
 
-# Function to get WAN interface name from device
-get_wan_interface_name() {
-    local wan_dev="$1"
-    local wan_interface=""
-
-    # Get interface name corresponding to WAN device from UCI configuration
-    for iface in $(uci -q show network | grep "^network\." | grep "\.ifname=" | cut -d. -f2 | cut -d= -f1); do
-        local ifname=$(uci -q get network.$iface.ifname)
-        if [ "$ifname" = "$wan_dev" ]; then
-            wan_interface="$iface"
-            break
-        fi
-    done
-
-    # Use default value if not found
-    if [ -z "$wan_interface" ]; then
-        case "$wan_dev" in
-            *eth*|*wan*)
-                wan_interface="wan"
-                ;;
-            *)
-                wan_interface="wan6"
-                ;;
-        esac
-    fi
-
-    echo "$wan_interface"
-}
-
-# Function to get tunnel local IPv6 address
+# Function to get tunnel local IPv6 address using network.sh functions
 get_tunnel_local_ipv6() {
     local iface_id="$1"
     local isp="$2"
+    local wan_interface="$3"
 
     # Set default iface_id if not provided
     [ -z "$iface_id" ] && {
@@ -360,19 +335,28 @@ get_tunnel_local_ipv6() {
         esac
     }
 
-    # Get WAN interface and IPv6 address (RA-assigned, not tunnel-specific)
-    local wan_dev="$(ip -6 route | grep '^default' | sed -n 's/.* dev \([^ ]\+\).*/\1/p' | head -n1)"
+    # Get WAN interface IPv6 address using network.sh functions
+    local wan_dev=""
+    local ipv6_addr=""
+
+    # Get device name for the interface
+    network_get_device wan_dev "$wan_interface"
     if [ -z "$wan_dev" ]; then
-        echo ""
+        logger -t ip4o6 "Failed to get device for interface: $wan_interface"
         return 1
     fi
 
-    # Get RA-assigned IPv6 address instead of any global address
-    local ra_ipv6="$(get_ra_ipv6_addr "$wan_dev")"
-    local ipv6_addr="${ra_ipv6%%/*}"
+    # Get IPv6 address using network.sh function
+    if ! network_get_ipaddr6 ipv6_addr "$wan_interface"; then
+        logger -t ip4o6 "Failed to get IPv6 address for interface: $wan_interface"
+        return 1
+    fi
+
+    # Remove prefix length if present
+    ipv6_addr="${ipv6_addr%%/*}"
 
     if [ -z "$ipv6_addr" ]; then
-        echo ""
+        logger -t ip4o6 "No IPv6 address found for interface: $wan_interface"
         return 1
     fi
 
@@ -406,37 +390,39 @@ get_tunnel_local_ipv6() {
     echo "$tunnel_local_ipv6"
 }
 
-# Function to get RA-assigned IPv6 address (not tunnel-specific)
-get_ra_ipv6_addr() {
-    local wan_dev="$1"
-    if [ -z "$wan_dev" ]; then
+# Function to check if interface has IPv6 address using network.sh functions
+check_wan_ipv6() {
+    local wan_interface="$1"
+    local ipv6_addr=""
+
+    # Check if interface is up
+    if ! network_is_up "$wan_interface"; then
+        logger -t ip4o6 "Interface $wan_interface is not up"
         return 1
     fi
 
-    # Get all global IPv6 addresses and filter out tunnel-specific ones
-    # RA addresses are typically dynamic and have different characteristics
-    local ra_ipv6=""
+    # Try to get IPv6 address
+    if network_get_ipaddr6 ipv6_addr "$wan_interface"; then
+        [ -n "$ipv6_addr" ] && return 0
+    fi
 
-    # Try to get RA address by checking for dynamic flag or avoiding known tunnel addresses
-    # This gets the first non-tunnel global IPv6 address
-    ra_ipv6="$(ip -6 addr show dev "$wan_dev" | awk '
-        /inet6 [0-9a-f:]+\/[0-9]+ scope global/ {
-            addr = $2;
-            # Skip if this looks like a tunnel address (manually added /128)
-            if (index(addr, "/128") == 0) {
-                print addr;
-                exit;
-            }
-        }')"
-
-    echo "$ra_ipv6"
+    logger -t ip4o6 "No IPv6 address found for interface: $wan_interface"
+    return 1
 }
 
-# Function to check if WAN has RA-assigned IPv6 address
-check_wan_ra_ipv6() {
-    local wan_dev="$1"
-    local ra_addr="$(get_ra_ipv6_addr "$wan_dev")"
-    [ -n "$ra_addr" ]
+# Function to determine WAN interface - simplified to check only wan6 and wan
+get_wan_interface() {
+    local wan_interface=""
+
+    # Check wan6 first (preferred for IPv6 tunnel)
+    if network_is_up "wan6" && check_wan_ipv6 "wan6"; then
+        wan_interface="wan6"
+    # Fallback to wan
+    elif network_is_up "wan" && check_wan_ipv6 "wan"; then
+        wan_interface="wan"
+    fi
+
+    echo "$wan_interface"
 }
 
 proto_ip4o6_setup() {
@@ -453,12 +439,14 @@ proto_ip4o6_setup() {
 	logger -t ip4o6 "isp: $isp"
 
 	[ -z "$peer_ipv6addr" ] && {
+        logger -t ip4o6 "No pear IPv6 address, skipping setup."
 		proto_notify_error "$config" "MISSING_PEER_IPV6ADDRESS"
 		proto_block_restart "$config"
 		return
 	}
 
 	[ -z "$ipv4addr" ] && {
+        logger -t ip4o6 "No fixed IPv4 address, skipping setup."
 		proto_notify_error "$config" "MISSING_FIXED_IPV4ADDRESS"
 		proto_block_restart "$config"
 		return
@@ -468,57 +456,44 @@ proto_ip4o6_setup() {
 	local ifname="ip4o6-${config}"
 	logger -t ip4o6 "ifname: $ifname"
 
-	# 1. Get WAN interface IPv6 address
-	wan_dev="$(ip -6 route | grep '^default' | sed -n 's/.* dev \([^ ]\+\).*/\1/p' | head -n1)"
+	# Determine WAN interface (wan6 or wan)
+	local wan_interface=$(get_wan_interface)
+	logger -t ip4o6 "wan_interface: $wan_interface"
+
+	# Return error if WAN interface doesn't exist or is not up
+	if [ -z "$wan_interface" ]; then
+		logger -t ip4o6 "ERROR: No suitable WAN interface (wan6/wan) found with IPv6 address"
+		return
+	fi
+
+	# Get WAN device name
+	local wan_dev=""
+	network_get_device wan_dev "$wan_interface"
 	logger -t ip4o6 "wan_dev: $wan_dev"
 
-	# Return error if WAN interface doesn't exist
-	if [ -z "$wan_dev" ]; then
-		logger -t ip4o6 "ERROR: No WAN interface found"
-		proto_notify_error "$config" "NO_WAN_INTERFACE"
-		proto_block_restart "$config"
-		return
-	fi
-
-	# Check if WAN has RA-assigned IPv6 address
-	if ! check_wan_ra_ipv6 "$wan_dev"; then
-		logger -t ip4o6 "ERROR: No RA-assigned IPv6 address found on WAN interface"
-		proto_notify_error "$config" "NO_RA_IPV6"
-		proto_block_restart "$config"
-		return
-	fi
-
-	# Get WAN interface name
-	local wan_interface_name=$(get_wan_interface_name "$wan_dev")
-	logger -t ip4o6 "wan_interface_name: $wan_interface_name"
-
-	# Set dependency on WAN interface
-	local current_depends=$(uci -q get network.${config}.depends)
-	if [ "$current_depends" != "$wan_interface_name" ]; then
-		logger -t ip4o6 "Setting dependency on interface: $wan_interface_name"
-		uci set network.${config}.depends="$wan_interface_name"
-		uci commit network
-	fi
-
 	# Get tunnel local IPv6 address
-	tunnel_local_ipv6=$(get_tunnel_local_ipv6 "$iface_id" "$isp")
+	tunnel_local_ipv6=$(get_tunnel_local_ipv6 "$iface_id" "$isp" "$wan_interface")
 	if [ -z "$tunnel_local_ipv6" ]; then
 		logger -t ip4o6 "ERROR: Failed to create tunnel local IPv6 address"
 		proto_notify_error "$config" "TUNNEL_LOCAL_IPV6_ERROR"
 		proto_block_restart "$config"
 		return
 	fi
-
 	logger -t ip4o6 "tunnel local_ipv6: $tunnel_local_ipv6"
-
-	# Save tunnel state for teardown
-	save_tunnel_state "$config" "$tunnel_local_ipv6" "$wan_dev"
 
 	# Add the local IPv6 address to WAN device
 	if [ -n "$wan_dev" ]; then
 		ip -6 addr show dev "$wan_dev" | grep -q "$tunnel_local_ipv6/128" || \
 			ip -6 addr add "$tunnel_local_ipv6/128" dev "$wan_dev"
+
+        # Save tunnel state for teardown
+        save_tunnel_state "$config" "$tunnel_local_ipv6" "$wan_interface" "$wan_dev"
 	fi
+
+	# Add dependency on WAN interface
+    # use logical interface name
+	proto_add_host_dependency "$config" "::" "$wan_interface"
+    logger -t ip4o6 "Added dependency to $wan_interface"
 
 	# Setup interface using netifd protocol handler
 	proto_init_update "$ifname" 1
@@ -536,20 +511,13 @@ proto_ip4o6_setup() {
 	json_add_int ttl "64"
 	json_add_string local "$tunnel_local_ipv6"
 	json_add_string remote "$peer_ipv6addr"
-	json_add_string link "$wan_dev"
+    # Don't add link parameter - let netifd handle it
 	proto_close_tunnel
-
-	# Add dependency AFTER tunnel
-	# proto_add_data
-	# json_add_array "depends_on"
-	# json_add_string "" "wan"  # ここは明示的に "wan" に固定を推奨
-	# json_close_array
-	# proto_close_data
 
 	# Send configuration
 	proto_send_update "$config"
 
-	logger -t ip4o6 "IPv4 over IPv6 tunnel setup completed with dependency on $wan_interface_name"
+	logger -t ip4o6 "IPv4 over IPv6 tunnel setup completed with dependency on $wan_interface"
 }
 
 proto_ip4o6_teardown() {
@@ -561,10 +529,11 @@ proto_ip4o6_teardown() {
 
 	# Load tunnel state from setup
 	local tunnel_local_ipv6=""
+	local wan_interface=""
 	local wan_dev=""
 
 	if load_tunnel_state "$config"; then
-		logger -t ip4o6 "Using saved tunnel state: local=$tunnel_local_ipv6, wan_dev=$wan_dev"
+		logger -t ip4o6 "Using saved tunnel state: local=$tunnel_local_ipv6, wan_interface=$wan_interface, wan_dev=$wan_dev"
 
 		# Remove the tunnel local IPv6 address from WAN device
 		if [ -n "$tunnel_local_ipv6" ] && [ -n "$wan_dev" ]; then
@@ -579,13 +548,6 @@ proto_ip4o6_teardown() {
 	fi
 
 	# Remove tunnel interface (netifd will handle the cleanup)
-	proto_init_update "$ifname" 0
-	# send error message
-	proto_notify_error "$config" "NO_IPIP_TUNNEL"
-	# proto_set_available 0
-
-	# DEBUG: make permission error.
-	proto_send_update "$config"
 
 	logger -t ip4o6 "IPv4 over IPv6 tunnel teardown completed"
 }
@@ -597,11 +559,9 @@ proto_ip4o6_init_config() {
 	proto_config_add_string "ipv4addr"
 	proto_config_add_string "mtu"
 	proto_config_add_string "isp"
-	proto_config_add_string "depends"
 
 	proto_config_add_optional "iface_id"
 	proto_config_add_optional "mtu"
-	# proto_config_add_optional "depends"
 
 	proto_no_device=1
 	proto_shell_init=1

@@ -3,8 +3,8 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=easy-ip4o6
-PKG_VERSION:=1.0
-PKG_RELEASE:=1
+PKG_VERSION:=1.1
+PKG_RELEASE:=3
 
 PKG_MAINTAINER:=Norio Suzuki <nosuzuki@postcard.st>
 PKG_LICENSE:=GPL-2.0
@@ -38,9 +38,6 @@ define Package/$(PKG_NAME)/install
 
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/protocol
 	$(INSTALL_DATA) ./files/ip4o6.js $(1)/www/luci-static/resources/protocol/ip4o6.js
-
-	$(INSTALL_DIR) $(1)/etc/hotplug.d/iface
-	$(INSTALL_DATA) ./files/99-ip4o6-control $(1)/etc/hotplug.d/iface/99-ip4o6-control
 endef
 
 define Package/$(PKG_NAME)/postinst

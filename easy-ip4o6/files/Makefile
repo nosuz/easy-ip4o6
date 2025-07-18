@@ -6,9 +6,6 @@ LJS_DST := /www/luci-static/resources/protocol/
 SH_SRC := ip4o6.sh
 SH_DST := /lib/netifd/proto/
 
-HTP_SRC := 99-ip4o6-control
-HTP_DST := /etc/hotplug.d/iface/
-
 
 .PHONY: all install remove clean
 
@@ -21,8 +18,6 @@ install:
 	install -m 0644 $(LJS_SRC) $(LJS_DST)
 	install -d $(SH_DST)
 	install -m 0755 $(SH_SRC) $(SH_DST)
-	install -d $(HTP_DST)
-	install -m 0644 $(HTP_SRC) $(HTP_DST)
 	rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
 	@echo "Reloading network configurations."
 	/etc/init.d/network reload
@@ -38,7 +33,6 @@ remove:
 
 	rm $(LJS_DST)/$(LJS_SRC)
 	rm $(SH_DST)/$(SH_SRC)
-	rm  $(HTP_DST)/$(HTP_SRC)
 
 	@echo "Reloading network configurations."
 	/etc/init.d/network reload
