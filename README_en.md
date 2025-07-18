@@ -117,6 +117,8 @@ If you encounter a `permission error` due to user ID issues, run `.devcontainer/
 
 ## Package Building
 
+Execute `make menuconfig`, and select (M mark) the `easy-ip4o6` package from Network so that it will be created. Then, `make build` to start build process.
+
 ```bash
 # Run inside Dev Container
 # Note: On first startup, the following commands will run and may take up to 30 minutes to complete
@@ -124,10 +126,9 @@ If you encounter a `permission error` due to user ID issues, run `.devcontainer/
 
 # Create package management
 # This container builds packages for x86_64
+make menuconfig
 make build
 ```
-
-When you run `make build`, `make menuconfig` is executed internally. Select (M mark) the `easy-ip4o6` package from Network so that it will be created. The build process will then start automatically.
 
 The created package will be copied to the top directory.
 
