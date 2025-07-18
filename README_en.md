@@ -21,6 +21,7 @@ However, for manual installation, the following packages must be pre-installed:
 
 - `openssh-sftp-server` - For receiving files via `scp`
 - `make` - For automatic execution of a series of commands
+- `coreutils-install` - For installing files
 
 ## Installation Methods
 

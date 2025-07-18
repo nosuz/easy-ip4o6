@@ -23,6 +23,7 @@ Easy-IP4o6は、Interlinkの[ZOOT NATIVE](https://www.interlink.or.jp/service/zo
 
 - `openssh-sftp-server` - `scp`によるファイルを受信する
 - `make` - 一連のコマンドを自動実行する
+- `coreutils-install` - ファイルをインストールする
 
 ## インストール方法
 
