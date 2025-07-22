@@ -4,7 +4,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=easy-ip4o6
 PKG_VERSION:=1.2
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 PKG_MAINTAINER:=Norio Suzuki <nosuzuki@postcard.st>
 PKG_LICENSE:=GPL-2.0

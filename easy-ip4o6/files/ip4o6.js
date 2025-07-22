@@ -140,7 +140,7 @@ return network.registerProtocol('ip4o6', {
 
         let o;
 
-        let ispOpt = s.taboption('general', form.ListValue, "isp", _('Tunneling Service'), _('Select your ISP tunneling service. "Other" will not work for now.'));
+        let ispOpt = s.taboption('general', form.ListValue, "isp", _('Tunneling Service'), _('Select your ISP tunneling service. '));
         ispOpt.default = "interlink";
         ispOpt.value("interlink", _("ZOOT NATIVE"));
         ispOpt.value("other", _("Other"));
