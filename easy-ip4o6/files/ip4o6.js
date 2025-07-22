@@ -34,35 +34,109 @@ return network.registerProtocol('ip4o6', {
     },
 
     renderFormOptions: function(s) {
-        // Hide Advanced Settings and DHCP tabs
-        setTimeout(() => {
-            let style = document.getElementById('ip4o6-hide-tabs');
-            if (!style) {
-                style = document.createElement('style');
-                style.id = 'ip4o6-hide-tabs';
-                style.innerHTML = `
-                    li[data-tab="advanced"] { display: none !important; }
-                    li.cbi-tab-disabled[data-tab="advanced"] { display: none !important; }
-                    li[data-tab="dhcp"] { display: none !important; }
-                    li.cbi-tab-disabled[data-tab="dhcp"] { display: none !important; }
-                `;
-                document.head.appendChild(style);
+        // Function to hide tabs for ip4o6 protocol
+        const hideTabs = () => {
+            // Multiple attempts with different selectors to ensure we find the tabs
+            const selectors = [
+                '.cbi-tabmenu li[data-tab="advanced"]',
+                'li[data-tab="advanced"]',
+                '.cbi-tab[data-tab="advanced"]',
+                '.cbi-tab-disabled[data-tab="advanced"]'
+            ];
+
+            const dhcpSelectors = [
+                '.cbi-tabmenu li[data-tab="dhcp"]',
+                'li[data-tab="dhcp"]',
+                '.cbi-tab[data-tab="dhcp"]',
+                '.cbi-tab-disabled[data-tab="dhcp"]'
+            ];
+
+            let advancedHidden = false;
+            let dhcpHidden = false;
+
+            // Try to hide Advanced Settings tab
+            for (const selector of selectors) {
+                const advancedTab = document.querySelector(selector);
+                if (advancedTab) {
+                    advancedTab.style.display = 'none';
+                    advancedHidden = true;
+                    console.log('Advanced Settings tab hidden with selector:', selector);
+                    break;
+                }
             }
 
-            // Direct DOM manipulation as fallback for Advanced Settings
-            const advancedTab = document.querySelector('li[data-tab="advanced"]');
-            if (advancedTab) {
-                advancedTab.style.display = 'none';
-                console.log('Advanced Settings tab hidden successfully');
+            // Try to hide DHCP tab
+            for (const selector of dhcpSelectors) {
+                const dhcpTab = document.querySelector(selector);
+                if (dhcpTab) {
+                    dhcpTab.style.display = 'none';
+                    dhcpHidden = true;
+                    console.log('DHCP tab hidden with selector:', selector);
+                    break;
+                }
             }
 
-            // Direct DOM manipulation as fallback for DHCP
-            const dhcpTab = document.querySelector('li[data-tab="dhcp"]');
-            if (dhcpTab) {
-                dhcpTab.style.display = 'none';
-                console.log('DHCP tab hidden successfully');
+            if (!advancedHidden) {
+                console.log('Advanced Settings tab not found');
             }
-        }, 0);
+            if (!dhcpHidden) {
+                console.log('DHCP tab not found');
+            }
+        };
+
+        // Function to show tabs for other protocols
+        const showTabs = () => {
+            const selectors = [
+                '.cbi-tabmenu li[data-tab="advanced"]',
+                'li[data-tab="advanced"]',
+                '.cbi-tab[data-tab="advanced"]',
+                '.cbi-tab-disabled[data-tab="advanced"]'
+            ];
+
+            const dhcpSelectors = [
+                '.cbi-tabmenu li[data-tab="dhcp"]',
+                'li[data-tab="dhcp"]',
+                '.cbi-tab[data-tab="dhcp"]',
+                '.cbi-tab-disabled[data-tab="dhcp"]'
+            ];
+
+            // Show Advanced Settings tab
+            for (const selector of selectors) {
+                const advancedTab = document.querySelector(selector);
+                if (advancedTab) {
+                    advancedTab.style.display = '';
+                    console.log('Advanced Settings tab shown');
+                    break;
+                }
+            }
+
+            // Show DHCP tab
+            for (const selector of dhcpSelectors) {
+                const dhcpTab = document.querySelector(selector);
+                if (dhcpTab) {
+                    dhcpTab.style.display = '';
+                    console.log('DHCP tab shown');
+                    break;
+                }
+            }
+        };
+
+        // Hide tabs with some delay
+        setTimeout(hideTabs, 100);
+
+        // Monitor protocol changes
+        const protocolField = document.querySelector('select[id*="proto"]');
+        if (protocolField) {
+            protocolField.addEventListener('change', function() {
+                setTimeout(() => {
+                    if (this.value === 'ip4o6') {
+                        hideTabs();
+                    } else {
+                        showTabs();
+                    }
+                }, 50);
+            });
+        }
 
         let o;
 
