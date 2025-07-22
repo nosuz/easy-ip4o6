@@ -34,6 +34,27 @@ return network.registerProtocol('ip4o6', {
     },
 
     renderFormOptions: function(s) {
+        // hide Advanced Settings
+        setTimeout(() => {
+            let style = document.getElementById('ip4o6-hide-advanced');
+            if (!style) {
+                style = document.createElement('style');
+                style.id = 'ip4o6-hide-advanced';
+                style.innerHTML = `
+                    li[data-tab="advanced"] { display: none !important; }
+                    li.cbi-tab-disabled[data-tab="advanced"] { display: none !important; }
+                `;
+                document.head.appendChild(style);
+            }
+
+            // Direct DOM manipulation as fallback
+            const advancedTab = document.querySelector('li[data-tab="advanced"]');
+            if (advancedTab) {
+                advancedTab.style.display = 'none';
+                console.log('Advanced Settings tab hidden successfully');
+            }
+        }, 0);
+
         let o;
 
         let ispOpt = s.taboption('general', form.ListValue, "isp", _('Tunneling Service'), _('Select your ISP tunneling service. "Other" will not work for now.'));
