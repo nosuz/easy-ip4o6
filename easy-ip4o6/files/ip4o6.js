@@ -34,24 +34,33 @@ return network.registerProtocol('ip4o6', {
     },
 
     renderFormOptions: function(s) {
-        // hide Advanced Settings
+        // Hide Advanced Settings and DHCP tabs
         setTimeout(() => {
-            let style = document.getElementById('ip4o6-hide-advanced');
+            let style = document.getElementById('ip4o6-hide-tabs');
             if (!style) {
                 style = document.createElement('style');
-                style.id = 'ip4o6-hide-advanced';
+                style.id = 'ip4o6-hide-tabs';
                 style.innerHTML = `
                     li[data-tab="advanced"] { display: none !important; }
                     li.cbi-tab-disabled[data-tab="advanced"] { display: none !important; }
+                    li[data-tab="dhcp"] { display: none !important; }
+                    li.cbi-tab-disabled[data-tab="dhcp"] { display: none !important; }
                 `;
                 document.head.appendChild(style);
             }
 
-            // Direct DOM manipulation as fallback
+            // Direct DOM manipulation as fallback for Advanced Settings
             const advancedTab = document.querySelector('li[data-tab="advanced"]');
             if (advancedTab) {
                 advancedTab.style.display = 'none';
                 console.log('Advanced Settings tab hidden successfully');
+            }
+
+            // Direct DOM manipulation as fallback for DHCP
+            const dhcpTab = document.querySelector('li[data-tab="dhcp"]');
+            if (dhcpTab) {
+                dhcpTab.style.display = 'none';
+                console.log('DHCP tab hidden successfully');
             }
         }, 0);
 
@@ -67,7 +76,7 @@ return network.registerProtocol('ip4o6', {
         o.optional = false;
         o.rmempty = false;
 
-        // ZOOT NATIVE用
+        // For ZOOT NATIVE
         let ifaceOptInterlink = s.taboption('general', form.Value, 'iface_id_interlink', _('Local IPv6 Interface'), _('Interface ID for the local end of IPIP tunnel. The local IPv6 address is not required.'));
         ifaceOptInterlink.optional = true;
         ifaceOptInterlink.placeholder = "::feed";
@@ -79,7 +88,7 @@ return network.registerProtocol('ip4o6', {
             return this.map.data.set(this.map.config, section_id, 'iface_id', value);
         };
 
-        // Other ISP用
+        // For Other ISP
         let ifaceOptOther = s.taboption('general', form.Value, 'iface_id_other', _('Local IPv6 Interface'), _('Interface ID for the local end of IPIP tunnel. The local IPv6 address is not required.'));
         ifaceOptOther.optional = true;
         ifaceOptOther.placeholder = "::1";
